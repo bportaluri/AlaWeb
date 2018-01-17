@@ -185,6 +185,7 @@ if __name__ == "__main__":
     
     print("Port", arduino)
     print("Current IP is", get_ip())
+    print("Point your browser to http://", get_ip(), sep="")
     print()
 
     #app.run()
