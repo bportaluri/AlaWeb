@@ -5,40 +5,26 @@ import sys
 import time
 import socket
 
-'''
-global arduino
-global currLevel
-global currColor
-global currAnim
-global currPal
-'''
 app = Flask(__name__)
 
-#serial_port = 'COM5'
-#serial_port = '/dev/ttyACM1'
+arduino = None
 
 currLevel = 0.4
 currColor = ""
 currAnim = ""
 currPal = ""
 
+
 @app.route("/")
-def hello():
-    templateData = {
-      'currAnim': currAnim,
-      'currPal': currPal,
-      'currLevel': currLevel,
-      'currColor': currColor
-    };
+def home():
+    templateData = {}
     return render_template('main.html', **templateData);
-
-
 
 @app.route("/brightness/", methods=['POST'])
 def brightness():
     btn_name = get_btn_name(request)
     print ("Brightness:", btn_name )
-    sendCmd("B="+str(btn_name))
+    arduino_send_cmd("B="+str(btn_name))
     templateData = {}
     return render_template('main.html', **templateData);
 
@@ -46,7 +32,7 @@ def brightness():
 def duration():
     duration = request.form['duration']
     print ("Duration:", duration)
-    sendCmd("D="+str(duration))
+    arduino_send_cmd("D="+str(duration))
     templateData = {}
     return render_template('main.html', **templateData);
 
@@ -54,7 +40,7 @@ def duration():
 def color():
     btn_name = get_btn_name(request)
     print ("Color:", btn_name )
-    sendCmd("C="+str(btn_name))
+    arduino_send_cmd("C="+str(btn_name))
     
     templateData = {}
     return render_template('main.html', **templateData);
@@ -68,7 +54,7 @@ def palette():
 
     btn_name = get_btn_name(request)
     print ("Palette:", btn_name)
-    sendCmd("P="+str(btn_name))
+    arduino_send_cmd("P="+str(btn_name))
     
     templateData = {}
     return render_template('main.html', **templateData);
@@ -77,7 +63,7 @@ def palette():
 def anim():
     btn_name = get_btn_name(request)
     print ("Animation code:", btn_name)
-    sendCmd("A="+str(btn_name))
+    arduino_send_cmd("A="+str(btn_name))
     templateData = {}
     return render_template('main.html', **templateData);
 
@@ -90,16 +76,16 @@ def pal():
     global currPal
 
     if 'btnRgb' in request.form:
-        sendCmd("a");
+        arduino_send_cmd("a");
         currPal = "RGB";
     elif 'btnRainbow' in request.form:
-        sendCmd("b");
+        arduino_send_cmd("b");
         currPal = "Rainbow";
     elif 'btnParty' in request.form:
-        sendCmd("d");
+        arduino_send_cmd("d");
         currPal = "Party";
     elif 'btnFire' in request.form:
-        sendCmd("f");
+        arduino_send_cmd("f");
         currPal = "Fire";
     
     templateData = {
@@ -120,19 +106,31 @@ def get_btn_name(request):
     return btn_name
 
 
-
-def get_resp(s):
+def arduino_get_resp(s):
     time.sleep(.1);
     while (s.in_waiting > 0):
         print(s.readline().decode(), end="");
 
-def sendCmd(s):
+def arduino_send_cmd(s):
     arduino.flush();
     s = s+'\n'
     arduino.write(s.encode());
-    get_resp(arduino);
+    arduino_get_resp(arduino);
     time.sleep(.1);
     arduino.flush()
+
+# try to detect the USB port where Arduino is connected
+def arduino_get_port():
+    print("Listing ports")
+    port = None
+    ports = serial.tools.list_ports.comports()
+    for p in ports:
+        print(p)
+        if "Arduino" in p[1]:
+            port = p[0]
+            print("Arduino detected on port", port)
+
+    return port
 
 
 def get_ip():
@@ -147,40 +145,27 @@ def get_ip():
         s.close()
     return ip
 
-def get_arduino_port():
-    port = None
-    ports = serial.tools.list_ports.comports()
-    for p in ports:
-        print(p)
-        if "Arduino" in p[1]:
-            port = p[0]
 
-    return port
-
-
-
-arduino=None
 
 if __name__ == "__main__":
 
-    print("main")
-    
-    
-    print (">>>>", arduino)
-    #print (">>>>", port)
     port = None
-    while(port==None):
-        port = get_arduino_port()
+    
+    # use the USB port name if passed
+    if len(sys.argv)>1:
+        port = sys.argv[1]
+        print("Arduino port: " + port)
 
-        if port:
-            print("Arduino detected on port", port)
-        else:
+    # otherwise tries to detect the port
+    # this seems to work only on Windows if Arduino USB driver is installed
+    while(port==None):
+        port = arduino_get_port()
+        if port==None:
             print("Arduino not found. Retrying...")
             time.sleep(5);
     
-    #serial.Serial(serial_port).close();
+    # open the serial interface
     arduino = serial.Serial(port, 9600, timeout=1)
-
     time.sleep(.5);
     
     print("Port", arduino)
@@ -188,8 +173,6 @@ if __name__ == "__main__":
     print("Point your browser to http://", get_ip(), sep="")
     print()
 
-    #app.run()
     #app.run(host='0.0.0.0', port=80, debug=True)
     app.run(host='0.0.0.0', port=80)
-
 
